@@ -1,0 +1,30 @@
+name: Stylelint
+
+on:
+  push:
+    branches:
+      - master
+      - 5.0-stable
+      - 4.2-stable
+    paths:
+      - 'public/stylesheets/**/*.css'
+  pull_request:
+    branches:
+      - '**master'
+      - '**5.0-stable'
+      - '**4.2-stable'
+    paths:
+      - 'public/stylesheets/**/*.css'
+
+jobs:
+  stylelint:
+    runs-on: ubuntu-20.04
+    container:
+      image: node:alpine
+    steps:
+      - name: Checkout Redmine
+        uses: actions/checkout@v3
+      - name: Install npm
+        run: yarn install
+      - name: Run stylelint
+        run: yarn stylelint "public/stylesheets/**/*.css"
