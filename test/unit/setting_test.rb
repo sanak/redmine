@@ -20,7 +20,7 @@
 require File.expand_path('../../test_helper', __FILE__)
 
 class SettingTest < ActiveSupport::TestCase
-  fixtures :users
+  fixtures :users, :settings
 
   def setup
     User.current = nil
