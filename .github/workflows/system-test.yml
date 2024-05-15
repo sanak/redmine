@@ -1,0 +1,56 @@
+name: System Test
+
+on:
+  push:
+    branches:
+      - master
+      - 5.0-stable
+      - 4.2-stable
+  pull_request:
+    branches:
+      - '**master'
+      - '**5.0-stable'
+      - '**4.2-stable'
+
+env:
+  RAILS_ENV: test
+  PARALLEL_WORKERS: 1
+
+jobs:
+  system-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby_version: ['2.7']
+        db_version: ['5.7']
+    runs-on: ubuntu-20.04
+    container:
+      image: ruby:${{ matrix.ruby_version }}-buster
+    services:
+      mysql:
+        image: mysql:${{ matrix.db_version }}
+        env:
+          MYSQL_ROOT_PASSWORD: password
+        ports:
+          - 3306:3306
+        options: --health-cmd "mysqladmin ping" --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - name: Checkout Redmine
+        uses: actions/checkout@v3
+      - name: Prepare test
+        uses: ./.github/actions/prepare-test
+        with:
+          db_type: mysql
+          additional_packages: true
+          system_test: true
+      - name: Run system test
+        env:
+          GOOGLE_CHROME_OPTS_ARGS: "headless,disable-gpu,no-sandbox,disable-dev-shm-usage"
+        run: |
+          bundle exec rake test:system
+      - name: Upload failure screenshots
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: failure-screenshots
+          path: tmp/screenshots/*
