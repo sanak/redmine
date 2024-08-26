@@ -82,14 +82,20 @@ class MemberRole < ApplicationRecord
           new_member_attrs << child_member.attributes.except('id')
         end
       end
-      new_member_ids = Member.insert_all!(new_member_attrs).to_a.pluck("id")
-      all_member_ids = existing_member_ids + new_member_ids
-      member_role_attrs = []
-      all_member_ids.each do |member_id|
-        member_role = MemberRole.new(:member_id => member_id, :role_id => role_id, :inherited_from => id)
-        member_role_attrs << member_role.attributes.except('id')
+      if new_member_attrs.present?
+        new_member_ids = Member.insert_all!(new_member_attrs).to_a.pluck("id")
+      else
+        new_member_ids = []
       end
-      MemberRole.insert_all!(member_role_attrs)
+      all_member_ids = existing_member_ids + new_member_ids
+      if all_member_ids.present?
+        member_role_attrs = []
+        all_member_ids.each do |member_id|
+          member_role = MemberRole.new(:member_id => member_id, :role_id => role_id, :inherited_from => id)
+          member_role_attrs << member_role.attributes.except('id')
+        end
+        MemberRole.insert_all!(member_role_attrs)
+      end
     end
   end
 
