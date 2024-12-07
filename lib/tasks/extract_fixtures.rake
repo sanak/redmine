@@ -37,8 +37,12 @@ end
 task :extract_fixtures => :environment do
   dir = ENV['DIR'] || 'tmp/fixtures'
   omit_default_or_nil = ActiveRecord::Type::Boolean.new.cast(ENV.fetch('OMIT_DEFAULT_OR_NIL', 'false'))
+  time_offset = ENV['TIME_OFFSET'] || ''
 
   FileUtils.mkdir_p(dir)
+  if time_offset.present? && !time_offset.match?(/^([+-](0[0-9]|1[0-4]):[0-5][0-9])$/)
+    abort("Invalid TIME_OFFSET format. Use +HH:MM or -HH:MM (e.g. +09:00)")
+  end
 
   skip_tables = ["schema_migrations", "ar_internal_metadata"]
   ActiveRecord::Base.establish_connection
@@ -59,8 +63,8 @@ task :extract_fixtures => :environment do
             record.delete(col.name)
             next
           elsif col.type == :datetime && record[col.name].present?
-            time = record[col.name].is_a?(String) ? Time.zone.parse(record[col.name]) : record[col.name]
-            record[col.name] = time
+            time = record[col.name].is_a?(String) ? Time.parse(record[col.name]) : record[col.name]
+            record[col.name] = time_offset.present? ? time.localtime(time_offset) : time.getutc()
           end
         end
         hash["#{table_name}_#{i.succ!}"] = record
