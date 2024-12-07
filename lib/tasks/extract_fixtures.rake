@@ -57,14 +57,15 @@ task :extract_fixtures => :environment do
       file.write data.inject({}) { |hash, record|
         # omit default or nil values or format time values
         columns.each do |col|
-          if omit_default_or_nil &&
-            ((!col.default.nil? && !record[col.name].nil? && record[col.name].to_s == col.default) ||
-            col.default.nil? && record[col.name].nil?)
+          if omit_default_or_nil && (
+              (!col.default.nil? && !record[col.name].nil? && record[col.name].to_s == col.default) ||
+              (col.default.nil? && record[col.name].nil?)
+            )
             record.delete(col.name)
             next
           elsif col.type == :datetime && record[col.name].present?
             time = record[col.name].is_a?(String) ? Time.parse(record[col.name]) : record[col.name]
-            record[col.name] = time_offset.present? ? time.localtime(time_offset) : time.getutc()
+            record[col.name] = time_offset.present? ? time.localtime(time_offset) : time.getutc
           end
         end
         hash["#{table_name}_#{i.succ!}"] = record
