@@ -18,6 +18,22 @@
 desc 'Create YAML test fixtures from data in an existing database.
 Defaults to development database. Set RAILS_ENV to override.'
 
+module Psych
+  module Visitors
+    class YAMLTree
+      # Override default time format
+      # https://github.com/ruby/ruby/blob/v3_3_6/ext/psych/lib/psych/visitors/yaml_tree.rb#L484-L490
+      def format_time time, utc = time.utc?
+        if utc
+          time.strftime("%Y-%m-%d %H:%M:%S")
+        else
+          time.strftime("%Y-%m-%d %H:%M:%S %:z")
+        end
+      end
+    end
+  end
+end
+
 task :extract_fixtures => :environment do
   dir = ENV['DIR'] || './tmp/fixtures'
   time_offset = ENV['TIME_OFFSET'] || ''
