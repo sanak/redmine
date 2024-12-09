@@ -34,9 +34,14 @@ task :extract_fixtures => :environment do
       data = ActiveRecord::Base.connection.select_all(sql)
       file.write data.inject({}) { |hash, record|
         # cast extracted values
-        columns.each { |col|
-          record[col.name] = ActiveRecord::Type.lookup(col.type).deserialize(record[col.name]) if record[col.name]
-        }
+        columns.each do |col|
+          if record[col.name]
+            record[col.name] = ActiveRecord::Type.lookup(col.type).deserialize(record[col.name])
+            if col.type == :datetime && record[col.name].is_a?(Time)
+              record[col.name] = record[col.name].getutc
+            end
+          end
+        end
         hash["#{table_name}_#{i.succ!}"] = record
         hash
       }.to_yaml
