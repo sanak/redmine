@@ -22,16 +22,19 @@ task :extract_fixtures => :environment do
   dir = ENV['DIR'] || './tmp/fixtures'
   FileUtils.mkdir_p(dir)
 
-  sql = "SELECT * FROM %s"
   skip_tables = ["schema_migrations", "ar_internal_metadata"]
   ActiveRecord::Base.establish_connection
   (ActiveRecord::Base.connection.tables - skip_tables).each do |table_name|
     i = "000"
     File.open(File.join(dir, "#{table_name}.yml"), 'w') do |file|
-      data = ActiveRecord::Base.connection.select_all(sql % table_name)
+      columns = ActiveRecord::Base.connection.columns(table_name)
+      column_names = columns.map(&:name)
+      order_columns = column_names.include?('id') ? 'id' : column_names.join(', ')
+      sql = "SELECT * FROM #{table_name} ORDER BY #{order_columns}"
+      data = ActiveRecord::Base.connection.select_all(sql)
       file.write data.inject({}) { |hash, record|
         # cast extracted values
-        ActiveRecord::Base.connection.columns(table_name).each { |col|
+        columns.each { |col|
           record[col.name] = ActiveRecord::Type.lookup(col.type).deserialize(record[col.name]) if record[col.name]
         }
         hash["#{table_name}_#{i.succ!}"] = record
