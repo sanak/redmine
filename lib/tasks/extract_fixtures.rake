@@ -20,7 +20,12 @@ Defaults to development database. Set RAILS_ENV to override.'
 
 task :extract_fixtures => :environment do
   dir = ENV['DIR'] || './tmp/fixtures'
+  time_offset = ENV['TIME_OFFSET'] || ''
+
   FileUtils.mkdir_p(dir)
+  if time_offset.present? && !time_offset.match?(/^([+-](0[0-9]|1[0-4]):[0-5][0-9])$/)
+    abort("Invalid TIME_OFFSET format. Use +HH:MM or -HH:MM (e.g. +09:00)")
+  end
 
   skip_tables = ["schema_migrations", "ar_internal_metadata"]
   ActiveRecord::Base.establish_connection
@@ -38,7 +43,11 @@ task :extract_fixtures => :environment do
           if record[col.name]
             record[col.name] = ActiveRecord::Type.lookup(col.type).deserialize(record[col.name])
             if col.type == :datetime && record[col.name].is_a?(Time)
-              record[col.name] = record[col.name].getutc
+              if time_offset.present?
+                record[col.name] = record[col.name].localtime(time_offset)
+              else
+                record[col.name] = record[col.name].getutc
+              end
             end
           end
         end
