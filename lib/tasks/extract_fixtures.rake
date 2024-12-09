@@ -18,19 +18,55 @@
 desc 'Create YAML test fixtures from data in an existing database.
 Defaults to development database. Set RAILS_ENV to override.'
 
+module Psych
+  module Visitors
+    class YAMLTree
+      # Override default time format
+      # https://github.com/ruby/ruby/blob/v3_3_6/ext/psych/lib/psych/visitors/yaml_tree.rb#L484-L490
+      def format_time time, utc = time.utc?
+        if utc
+          time.strftime("%Y-%m-%d %H:%M:%S")
+        else
+          time.strftime("%Y-%m-%d %H:%M:%S %:z")
+        end
+      end
+    end
+  end
+end
+
 task :extract_fixtures => :environment do
-  sql = "SELECT * FROM %s"
-  skip_tables = ["schema_info"]
+  dir = ENV['DIR'] || './tmp/fixtures'
+  time_offset = ENV['TIME_OFFSET'] || ''
+
+  FileUtils.mkdir_p(dir)
+  if time_offset.present? && !time_offset.match?(/^([+-](0[0-9]|1[0-4]):[0-5][0-9])$/)
+    abort("Invalid TIME_OFFSET format. Use +HH:MM or -HH:MM (e.g. +09:00)")
+  end
+
+  skip_tables = ["schema_migrations", "ar_internal_metadata"]
   ActiveRecord::Base.establish_connection
   (ActiveRecord::Base.connection.tables - skip_tables).each do |table_name|
     i = "000"
-    File.open("#{Rails.root}/#{table_name}.yml", 'w' ) do |file|
-      data = ActiveRecord::Base.connection.select_all(sql % table_name)
+    File.open(File.join(dir, "#{table_name}.yml"), 'w') do |file|
+      columns = ActiveRecord::Base.connection.columns(table_name)
+      column_names = columns.map(&:name)
+      order_columns = column_names.include?('id') ? 'id' : column_names.join(', ')
+      sql = "SELECT * FROM #{table_name} ORDER BY #{order_columns}"
+      data = ActiveRecord::Base.connection.select_all(sql)
       file.write data.inject({}) { |hash, record|
         # cast extracted values
-        ActiveRecord::Base.connection.columns(table_name).each { |col|
-          record[col.name] = col.type_cast(record[col.name]) if record[col.name]
-        }
+        columns.each do |col|
+          if record[col.name]
+            record[col.name] = ActiveRecord::Type.lookup(col.type).deserialize(record[col.name])
+            if col.type == :datetime && record[col.name].is_a?(Time)
+              if time_offset.present?
+                record[col.name] = record[col.name].localtime(time_offset)
+              else
+                record[col.name] = record[col.name].getutc
+              end
+            end
+          end
+        end
         hash["#{table_name}_#{i.succ!}"] = record
         hash
       }.to_yaml
