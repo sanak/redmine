@@ -19,17 +19,20 @@ desc 'Create YAML test fixtures from data in an existing database.
 Defaults to development database. Set RAILS_ENV to override.'
 
 task :extract_fixtures => :environment do
+  dir = ENV['DIR'] || './tmp/fixtures'
+  FileUtils.mkdir_p(dir)
+
   sql = "SELECT * FROM %s"
-  skip_tables = ["schema_info"]
+  skip_tables = ["schema_migrations", "ar_internal_metadata"]
   ActiveRecord::Base.establish_connection
   (ActiveRecord::Base.connection.tables - skip_tables).each do |table_name|
     i = "000"
-    File.open("#{Rails.root}/#{table_name}.yml", 'w' ) do |file|
+    File.open(File.join(dir, "#{table_name}.yml"), 'w') do |file|
       data = ActiveRecord::Base.connection.select_all(sql % table_name)
       file.write data.inject({}) { |hash, record|
         # cast extracted values
         ActiveRecord::Base.connection.columns(table_name).each { |col|
-          record[col.name] = col.type_cast(record[col.name]) if record[col.name]
+          record[col.name] = ActiveRecord::Type.lookup(col.type).deserialize(record[col.name]) if record[col.name]
         }
         hash["#{table_name}_#{i.succ!}"] = record
         hash
