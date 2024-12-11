@@ -38,6 +38,7 @@ task :extract_fixtures => :environment do
   dir = ENV['DIR'] || './tmp/fixtures'
   time_offset = ENV['TIME_OFFSET'] || ''
   skip_tables = ENV['SKIP_TABLES']&.split(',') || []
+  table_filters = ENV['TABLE_FILTERS']&.split(';')&.map {|tf| tf.split(":", 2)}&.to_h || {}
 
   FileUtils.mkdir_p(dir)
   if time_offset.present? && !time_offset.match?(/^([+-](0[0-9]|1[0-4]):[0-5][0-9])$/)
@@ -52,7 +53,8 @@ task :extract_fixtures => :environment do
       columns = ActiveRecord::Base.connection.columns(table_name)
       column_names = columns.map(&:name)
       order_columns = column_names.include?('id') ? 'id' : column_names.join(', ')
-      sql = "SELECT * FROM #{table_name} ORDER BY #{order_columns}"
+      where_clause = table_filters.has_key?(table_name) ? "WHERE #{table_filters[table_name]}" : ''
+      sql = "SELECT * FROM #{table_name} #{where_clause} ORDER BY #{order_columns}"
       data = ActiveRecord::Base.connection.select_all(sql)
       file.write data.inject({}) { |hash, record|
         # cast extracted values
