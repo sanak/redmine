@@ -37,13 +37,14 @@ end
 task :extract_fixtures => :environment do
   dir = ENV['DIR'] || './tmp/fixtures'
   time_offset = ENV['TIME_OFFSET'] || ''
+  skip_tables = ENV['SKIP_TABLES']&.split(',') || []
 
   FileUtils.mkdir_p(dir)
   if time_offset.present? && !time_offset.match?(/^([+-](0[0-9]|1[0-4]):[0-5][0-9])$/)
     abort("Invalid TIME_OFFSET format. Use +HH:MM or -HH:MM (e.g. +09:00)")
   end
+  skip_tables += ["schema_migrations", "ar_internal_metadata"]
 
-  skip_tables = ["schema_migrations", "ar_internal_metadata"]
   ActiveRecord::Base.establish_connection
   (ActiveRecord::Base.connection.tables - skip_tables).each do |table_name|
     i = "000"
