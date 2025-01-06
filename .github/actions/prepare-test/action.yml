@@ -1,0 +1,87 @@
+name: 'Prepare test'
+description: 'Prepare environment before test'
+inputs:
+  db_type:
+    description: 'mysql, postgres, sqlite'
+    required: true
+    default: 'sqlite'
+  additional_packages:
+    description: 'Install additional packages'
+    required: false
+    default: false
+  system_test:
+    description: 'Prepare system test environment'
+    required: false
+    default: false
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install apt packages
+      run: |
+        apt-get update
+        apt-get install -y --no-install-recommends gsfonts
+        if [ ${{ inputs.additional_packages }} = true ]; then
+          apt-get install -y --no-install-recommends \
+            bzr git mercurial subversion \
+            gsfonts ghostscript imagemagick
+          sed -ri 's/(rights)="none" (pattern="PDF")/\1="read" \2/' /etc/ImageMagick-6/policy.xml
+        fi
+        if [ ${{ inputs.db_type }} = "mysql" ]; then
+          apt-get install -y --no-install-recommends default-mysql-client-core
+        fi
+        if [ ${{ inputs.db_type }} = "postgres" ]; then
+          apt-get install -y --no-install-recommends postgresql-client
+        fi
+        # For system test
+        if [ ${{ inputs.system_test }} = true ]; then
+          wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add -
+          sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list'
+          apt-get update
+          apt-get install -y google-chrome-stable
+        fi
+      shell: bash
+    - name: Prepare config/database.yml
+      run: |
+        if [ ${{ inputs.db_type }} = "mysql" ]; then
+          cat <<EOF > config/database.yml
+            test:
+              adapter: mysql2
+              database: redmine
+              host: mysql
+              username: root
+              password: password
+              encoding: utf8mb4
+        EOF
+        fi
+        if [ ${{ inputs.db_type }} = "postgres" ]; then
+          cat <<EOF > config/database.yml
+            test:
+              adapter: postgresql
+              database: redmine
+              host: postgres
+              username: postgres
+              password: postgres
+              encoding: utf8
+        EOF
+        fi
+        if [ ${{ inputs.db_type }} = "sqlite" ]; then
+          cat <<EOF > config/database.yml
+            test:
+              adapter: sqlite3
+              database: db/redmine.sqlite3
+        EOF
+        fi
+      shell: bash
+    - name: Install gem
+      run: |
+        if [ ${{ inputs.additional_packages }} = true ]; then
+          bundle config set --local path 'vendor/bundle' without 'development'
+        else
+          bundle config set --local path 'vendor/bundle' without 'development minimagick'
+        fi
+        bundle install --jobs=4 --retry=3
+      shell: bash
+    - name: Prepare database
+      run: bundle exec rake db:create db:migrate
+      shell: bash
