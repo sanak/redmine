@@ -37,6 +37,7 @@ end
 task :extract_fixtures => :environment do
   dir = ENV['DIR'] || './tmp/fixtures'
   time_offset = ENV['TIME_OFFSET'] || ''
+  tables = ENV['TABLES']&.split(',') || []
   skip_tables = ENV['SKIP_TABLES']&.split(',') || []
   table_filters = ENV['TABLE_FILTERS']&.split(';')&.map {|tf| tf.split(":", 2)}&.to_h || {}
 
@@ -47,7 +48,8 @@ task :extract_fixtures => :environment do
   skip_tables += ["schema_migrations", "ar_internal_metadata"]
 
   ActiveRecord::Base.establish_connection
-  (ActiveRecord::Base.connection.tables - skip_tables).each do |table_name|
+  tables = tables.present? ? tables : ActiveRecord::Base.connection.tables
+  (tables - skip_tables).each do |table_name|
     i = "000"
     File.open(File.join(dir, "#{table_name}.yml"), 'w') do |file|
       columns = ActiveRecord::Base.connection.columns(table_name)
