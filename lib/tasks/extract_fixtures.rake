@@ -40,6 +40,7 @@ task :extract_fixtures => :environment do
   tables = ENV['TABLES']&.split(',') || []
   skip_tables = ENV['SKIP_TABLES']&.split(',') || []
   table_filters = ENV['TABLE_FILTERS']&.split(';')&.map {|tf| tf.split(":", 2)}&.to_h || {}
+  omit_default_or_nil = ActiveRecord::Type::Boolean.new.cast(ENV.fetch('OMIT_DEFAULT_OR_NIL', 'false'))
 
   FileUtils.mkdir_p(dir)
   if time_offset.present? && !time_offset.match?(/^([+-](0[0-9]|1[0-4]):[0-5][0-9])$/)
@@ -60,9 +61,15 @@ task :extract_fixtures => :environment do
       sql = "SELECT * FROM #{table_name} #{where_clause} ORDER BY #{order_columns}"
       data = ActiveRecord::Base.connection.select_all(sql)
       file.write data.inject({}) { |hash, record|
-        # cast extracted values
+        # omit default or nil values or cast extracted values with formatting time
         columns.each do |col|
-          if record[col.name]
+          if omit_default_or_nil && (
+            (!col.default.nil? && !record[col.name].nil? && record[col.name].to_s == col.default) ||
+            (col.default.nil? && record[col.name].nil?)
+          )
+            record.delete(col.name)
+            next
+          elsif record[col.name]
             record[col.name] = ActiveRecord::Type.lookup(col.type).deserialize(record[col.name])
             if col.type == :datetime && record[col.name].is_a?(Time)
               if time_offset.present?
