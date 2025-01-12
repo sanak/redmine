@@ -51,15 +51,18 @@ task :extract_fixtures => :environment do
   ActiveRecord::Base.establish_connection
   tables = tables.present? ? tables : ActiveRecord::Base.connection.tables
   (tables - skip_tables).each do |table_name|
+    columns = ActiveRecord::Base.connection.columns(table_name)
+    column_names = columns.map(&:name)
+    has_id_column = column_names.include?('id')
+    order_columns = has_id_column ? 'id' : column_names.join(', ')
+    where_clause = table_filters.has_key?(table_name) ? "WHERE #{table_filters[table_name]}" : ''
+    sql = "SELECT * FROM #{table_name} #{where_clause} ORDER BY #{order_columns}"
+    data = ActiveRecord::Base.connection.select_all(sql)
+    if data.empty?
+      next
+    end
     i = "000"
     File.open(File.join(dir, "#{table_name}.yml"), 'w') do |file|
-      columns = ActiveRecord::Base.connection.columns(table_name)
-      column_names = columns.map(&:name)
-      has_id_column = column_names.include?('id')
-      order_columns = has_id_column ? 'id' : column_names.join(', ')
-      where_clause = table_filters.has_key?(table_name) ? "WHERE #{table_filters[table_name]}" : ''
-      sql = "SELECT * FROM #{table_name} #{where_clause} ORDER BY #{order_columns}"
-      data = ActiveRecord::Base.connection.select_all(sql)
       file.write data.inject({}) { |hash, record|
         # omit default or nil values or cast extracted values with formatting time
         columns.each do |col|
