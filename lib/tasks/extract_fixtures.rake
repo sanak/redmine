@@ -80,6 +80,11 @@ task :extract_fixtures => :environment do
               else
                 record[col.name] = record[col.name].getutc
               end
+            elsif col.type == :binary
+              utf8text = record[col.name].dup.force_encoding('UTF-8')
+              if utf8text.valid_encoding?
+                record[col.name] = utf8text
+              end
             end
           end
         end
